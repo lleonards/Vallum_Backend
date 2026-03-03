@@ -2,8 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import { supabaseAdmin } from '../utils/supabase'
 import { logger } from '../utils/logger'
 
-// ✅ CORREÇÃO: Criando e exportando a interface AuthRequest
-// Isso permite que 'req.user' seja reconhecido e que outros arquivos importem esse tipo
+// ✅ Interface estendendo corretamente o Request do Express
 export interface AuthRequest extends Request {
   user?: {
     id: string
@@ -13,7 +12,7 @@ export interface AuthRequest extends Request {
 }
 
 export async function authMiddleware(
-  req: AuthRequest, // ✅ CORREÇÃO: Usando a interface AuthRequest aqui
+  req: AuthRequest,
   res: Response,
   next: NextFunction
 ): Promise<void> {
@@ -36,11 +35,11 @@ export async function authMiddleware(
       return
     }
 
-    // ✅ Agora o TypeScript permite anexar o usuário porque usamos AuthRequest
+    // Anexa usuário ao request
     req.user = {
       id: data.user.id,
       email: data.user.email ?? '',
-      role: (data.user as any).role ?? 'authenticated'
+      role: (data.user as any)?.role ?? 'authenticated',
     }
 
     next()
