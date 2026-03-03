@@ -11,7 +11,8 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "declaration": false,
-    "sourceMap": true
+    "sourceMap": true,
+    "types": ["node", "express", "multer"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
