@@ -2,13 +2,18 @@ import { Request, Response, NextFunction } from 'express'
 import { supabaseAdmin } from '../utils/supabase'
 import { logger } from '../utils/logger'
 
-// ✅ Interface estendendo corretamente o Request do Express
+// ✅ CORREÇÃO DEFINITIVA: 
+// Adicionamos 'user', 'file', 'files' e 'body' na lista oficial do TypeScript
 export interface AuthRequest extends Request {
   user?: {
     id: string
     email: string
     role: string
   }
+  // Isso impede os erros "Property does not exist on type AuthRequest"
+  file?: any
+  files?: any
+  body: any
 }
 
 export async function authMiddleware(
