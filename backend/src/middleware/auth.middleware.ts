@@ -10,6 +10,7 @@ export async function authMiddleware(
   try {
     const authHeader = req.headers.authorization
 
+    // Verifica se o header Authorization existe e começa com Bearer
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       res.status(401).json({ error: 'Token de autorização não fornecido' })
       return
@@ -17,20 +18,19 @@ export async function authMiddleware(
 
     const token = authHeader.split(' ')[1]
 
-    const {
-      data: { user },
-      error
-    } = await supabaseAdmin.auth.getUser(token)
+    // Valida o token no Supabase
+    const { data, error } = await supabaseAdmin.auth.getUser(token)
 
-    if (error || !user) {
+    if (error || !data?.user) {
       res.status(401).json({ error: 'Token inválido ou expirado' })
       return
     }
 
+    // Anexa o usuário na requisição
     req.user = {
-      id: user.id,
-      email: user.email || '',
-      role: user.role || 'authenticated'
+      id: data.user.id,
+      email: data.user.email ?? '',
+      role: (data.user as any).role ?? 'authenticated'
     }
 
     next()
