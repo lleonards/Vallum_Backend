@@ -10,25 +10,28 @@ export const pdfRoutes = Router()
 // ── Rotate pages ──────────────────────────────────────────────────────────────
 pdfRoutes.post('/rotate', uploadPDF.single('file'), async (req: AuthRequest, res: Response) => {
   try {
+    // ✅ Regra 4: Garantir que req.file existe
     if (!req.file) {
-      res.status(400).json({ error: 'Arquivo PDF não fornecido' })
-      return
+      return res.status(400).json({ error: 'Arquivo PDF não fornecido' })
     }
 
-    const { pageIndex = 0, angle = 90 } = req.body
+    // ✅ Regra 6: Fazer parseInt nos valores do body
+    const pageIndex = parseInt(req.body.pageIndex || '0')
+    const angle = parseInt(req.body.angle || '90')
+
     const pdfBytes = fs.readFileSync(req.file.path)
     const pdfDoc = await PDFDocument.load(pdfBytes)
     
     const pages = pdfDoc.getPages()
-    const targetPage = pages[parseInt(pageIndex)]
+    const targetPage = pages[pageIndex]
     
     if (!targetPage) {
-      res.status(400).json({ error: 'Índice de página inválido' })
-      return
+      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
+      return res.status(400).json({ error: 'Índice de página inválido' })
     }
 
     const currentRotation = targetPage.getRotation().angle
-    targetPage.setRotation(degrees((currentRotation + parseInt(angle)) % 360))
+    targetPage.setRotation(degrees((currentRotation + angle) % 360))
 
     const modifiedPdf = await pdfDoc.save()
 
@@ -36,6 +39,7 @@ pdfRoutes.post('/rotate', uploadPDF.single('file'), async (req: AuthRequest, res
     res.setHeader('Content-Disposition', 'attachment; filename="rotated.pdf"')
     res.send(Buffer.from(modifiedPdf))
 
+    // ✅ Regra 5: Sempre deletar arquivo temporário
     if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
   } catch (err) {
     logger.error('PDF rotate error:', err)
@@ -48,11 +52,10 @@ pdfRoutes.post('/rotate', uploadPDF.single('file'), async (req: AuthRequest, res
 pdfRoutes.post('/flip-orientation', uploadPDF.single('file'), async (req: AuthRequest, res: Response) => {
   try {
     if (!req.file) {
-      res.status(400).json({ error: 'Arquivo PDF não fornecido' })
-      return
+      return res.status(400).json({ error: 'Arquivo PDF não fornecido' })
     }
 
-    const { pageIndex, applyAll = false } = req.body
+    const applyAll = req.body.applyAll === 'true' || req.body.applyAll === true
     const pdfBytes = fs.readFileSync(req.file.path)
     const pdfDoc = await PDFDocument.load(pdfBytes)
     const pages = pdfDoc.getPages()
@@ -62,10 +65,11 @@ pdfRoutes.post('/flip-orientation', uploadPDF.single('file'), async (req: AuthRe
       page.setSize(height, width)
     }
 
-    if (applyAll === 'true' || applyAll === true) {
+    if (applyAll) {
       pages.forEach(flipPage)
     } else {
-      const idx = parseInt(pageIndex || '0')
+      // ✅ Regra 6: parseInt no pageIndex
+      const idx = parseInt(req.body.pageIndex || '0')
       if (pages[idx]) flipPage(pages[idx])
     }
 
@@ -84,11 +88,12 @@ pdfRoutes.post('/flip-orientation', uploadPDF.single('file'), async (req: AuthRe
 
 // ── Merge PDFs ────────────────────────────────────────────────────────────────
 pdfRoutes.post('/merge', uploadPDF.array('files', 10), async (req: AuthRequest, res: Response) => {
+  // ✅ Regra 3: Tipar corretamente req.files como array do Multer
   const files = req.files as Express.Multer.File[]
+  
   try {
     if (!files || files.length < 2) {
-      res.status(400).json({ error: 'Envie pelo menos 2 arquivos PDF' })
-      return
+      return res.status(400).json({ error: 'Envie pelo menos 2 arquivos PDF' })
     }
 
     const mergedDoc = await PDFDocument.create()
@@ -108,6 +113,7 @@ pdfRoutes.post('/merge', uploadPDF.array('files', 10), async (req: AuthRequest, 
     logger.error('PDF merge error:', err)
     res.status(500).json({ error: 'Erro ao mesclar PDFs' })
   } finally {
+    // ✅ Regra 5: Limpeza de todos os arquivos do array
     files?.forEach((f) => { if (fs.existsSync(f.path)) fs.unlinkSync(f.path) })
   }
 })
@@ -116,19 +122,18 @@ pdfRoutes.post('/merge', uploadPDF.array('files', 10), async (req: AuthRequest, 
 pdfRoutes.post('/split', uploadPDF.single('file'), async (req: AuthRequest, res: Response) => {
   try {
     if (!req.file) {
-      res.status(400).json({ error: 'Arquivo PDF não fornecido' })
-      return
+      return res.status(400).json({ error: 'Arquivo PDF não fornecido' })
     }
 
-    const { pageIndex } = req.body
-    const splitAt = parseInt(pageIndex || '1')
+    // ✅ Regra 6: parseInt
+    const splitAt = parseInt(req.body.pageIndex || '1')
     const pdfBytes = fs.readFileSync(req.file.path)
     const srcDoc = await PDFDocument.load(pdfBytes)
     const total = srcDoc.getPageCount()
 
     if (splitAt < 1 || splitAt >= total) {
-      res.status(400).json({ error: `pageIndex deve estar entre 1 e ${total - 1}` })
-      return
+      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
+      return res.status(400).json({ error: `pageIndex deve estar entre 1 e ${total - 1}` })
     }
 
     const part1 = await PDFDocument.create()
@@ -157,8 +162,7 @@ pdfRoutes.post('/split', uploadPDF.single('file'), async (req: AuthRequest, res:
 pdfRoutes.post('/reorder', uploadPDF.single('file'), async (req: AuthRequest, res: Response) => {
   try {
     if (!req.file) {
-      res.status(400).json({ error: 'Arquivo PDF não fornecido' })
-      return
+      return res.status(400).json({ error: 'Arquivo PDF não fornecido' })
     }
 
     const { order } = req.body
@@ -187,8 +191,7 @@ pdfRoutes.post('/reorder', uploadPDF.single('file'), async (req: AuthRequest, re
 pdfRoutes.post('/delete-pages', uploadPDF.single('file'), async (req: AuthRequest, res: Response) => {
   try {
     if (!req.file) {
-      res.status(400).json({ error: 'Arquivo PDF não fornecido' })
-      return
+      return res.status(400).json({ error: 'Arquivo PDF não fornecido' })
     }
 
     const { pageIndices } = req.body
@@ -196,12 +199,11 @@ pdfRoutes.post('/delete-pages', uploadPDF.single('file'), async (req: AuthReques
     const pdfBytes = fs.readFileSync(req.file.path)
     const pdfDoc = await PDFDocument.load(pdfBytes)
 
-    // Delete from end to start to preserve indices
     const sortedIndices = [...indices].sort((a, b) => b - a)
     sortedIndices.forEach((i) => {
-        if (i >= 0 && i < pdfDoc.getPageCount()) {
-            pdfDoc.removePage(i)
-        }
+      if (i >= 0 && i < pdfDoc.getPageCount()) {
+        pdfDoc.removePage(i)
+      }
     })
 
     const modifiedPdf = await pdfDoc.save()
@@ -221,8 +223,7 @@ pdfRoutes.post('/delete-pages', uploadPDF.single('file'), async (req: AuthReques
 pdfRoutes.post('/info', uploadPDF.single('file'), async (req: AuthRequest, res: Response) => {
   try {
     if (!req.file) {
-      res.status(400).json({ error: 'Arquivo PDF não fornecido' })
-      return
+      return res.status(400).json({ error: 'Arquivo PDF não fornecido' })
     }
 
     const pdfBytes = fs.readFileSync(req.file.path)
