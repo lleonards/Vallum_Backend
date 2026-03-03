@@ -1,9 +1,8 @@
 import { Router, Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
-import { uploadPDF, uploadMemory } from '../middleware/upload.middleware'
-import { PDFDocument, degrees, rgb } from 'pdf-lib'
+import { uploadPDF } from '../middleware/upload.middleware'
+import { PDFDocument, degrees } from 'pdf-lib'
 import fs from 'fs'
-import path from 'path'
 import { logger } from '../utils/logger'
 
 export const pdfRoutes = Router()
@@ -37,11 +36,10 @@ pdfRoutes.post('/rotate', uploadPDF.single('file'), async (req: AuthRequest, res
     res.setHeader('Content-Disposition', 'attachment; filename="rotated.pdf"')
     res.send(Buffer.from(modifiedPdf))
 
-    // Cleanup
-    fs.unlinkSync(req.file.path)
+    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
   } catch (err) {
     logger.error('PDF rotate error:', err)
-    if (req.file) fs.unlinkSync(req.file.path)
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
     res.status(500).json({ error: 'Erro ao rotacionar PDF' })
   }
 })
@@ -76,10 +74,10 @@ pdfRoutes.post('/flip-orientation', uploadPDF.single('file'), async (req: AuthRe
     res.setHeader('Content-Disposition', 'attachment; filename="flipped.pdf"')
     res.send(Buffer.from(modifiedPdf))
 
-    fs.unlinkSync(req.file.path)
+    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
   } catch (err) {
     logger.error('PDF flip error:', err)
-    if (req.file) fs.unlinkSync(req.file.path)
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
     res.status(500).json({ error: 'Erro ao alterar orientação' })
   }
 })
@@ -147,10 +145,10 @@ pdfRoutes.post('/split', uploadPDF.single('file'), async (req: AuthRequest, res:
       part2: Buffer.from(await part2.save()).toString('base64'),
     })
 
-    fs.unlinkSync(req.file.path)
+    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
   } catch (err) {
     logger.error('PDF split error:', err)
-    if (req.file) fs.unlinkSync(req.file.path)
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
     res.status(500).json({ error: 'Erro ao dividir PDF' })
   }
 })
@@ -177,10 +175,10 @@ pdfRoutes.post('/reorder', uploadPDF.single('file'), async (req: AuthRequest, re
     res.setHeader('Content-Disposition', 'attachment; filename="reordered.pdf"')
     res.send(Buffer.from(reorderedPdf))
 
-    fs.unlinkSync(req.file.path)
+    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
   } catch (err) {
     logger.error('PDF reorder error:', err)
-    if (req.file) fs.unlinkSync(req.file.path)
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
     res.status(500).json({ error: 'Erro ao reordenar páginas' })
   }
 })
@@ -199,17 +197,22 @@ pdfRoutes.post('/delete-pages', uploadPDF.single('file'), async (req: AuthReques
     const pdfDoc = await PDFDocument.load(pdfBytes)
 
     // Delete from end to start to preserve indices
-    [...indices].sort((a, b) => b - a).forEach((i) => pdfDoc.removePage(i))
+    const sortedIndices = [...indices].sort((a, b) => b - a)
+    sortedIndices.forEach((i) => {
+        if (i >= 0 && i < pdfDoc.getPageCount()) {
+            pdfDoc.removePage(i)
+        }
+    })
 
     const modifiedPdf = await pdfDoc.save()
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', 'attachment; filename="modified.pdf"')
     res.send(Buffer.from(modifiedPdf))
 
-    fs.unlinkSync(req.file.path)
+    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
   } catch (err) {
     logger.error('PDF delete pages error:', err)
-    if (req.file) fs.unlinkSync(req.file.path)
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
     res.status(500).json({ error: 'Erro ao deletar páginas' })
   }
 })
@@ -228,13 +231,13 @@ pdfRoutes.post('/info', uploadPDF.single('file'), async (req: AuthRequest, res: 
 
     const info = {
       pageCount: pdfDoc.getPageCount(),
-      title: pdfDoc.getTitle(),
-      author: pdfDoc.getAuthor(),
-      subject: pdfDoc.getSubject(),
-      creator: pdfDoc.getCreator(),
-      producer: pdfDoc.getProducer(),
-      creationDate: pdfDoc.getCreationDate()?.toISOString(),
-      modificationDate: pdfDoc.getModificationDate()?.toISOString(),
+      title: pdfDoc.getTitle() || '',
+      author: pdfDoc.getAuthor() || '',
+      subject: pdfDoc.getSubject() || '',
+      creator: pdfDoc.getCreator() || '',
+      producer: pdfDoc.getProducer() || '',
+      creationDate: pdfDoc.getCreationDate()?.toISOString() || '',
+      modificationDate: pdfDoc.getModificationDate()?.toISOString() || '',
       pages: pages.map((p, i) => ({
         index: i,
         width: Math.round(p.getWidth()),
@@ -246,10 +249,10 @@ pdfRoutes.post('/info', uploadPDF.single('file'), async (req: AuthRequest, res: 
     }
 
     res.json(info)
-    fs.unlinkSync(req.file.path)
+    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
   } catch (err) {
     logger.error('PDF info error:', err)
-    if (req.file) fs.unlinkSync(req.file.path)
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
     res.status(500).json({ error: 'Erro ao ler informações do PDF' })
   }
 })
