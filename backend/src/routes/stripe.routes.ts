@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import Stripe from 'stripe'
 import { supabaseAdmin } from '../utils/supabase'
+// ✅ Importação agora está correta porque adicionamos o 'export' no middleware
 import { authMiddleware, AuthRequest } from '../middleware/auth.middleware'
 import { logger } from '../utils/logger'
 
@@ -14,7 +15,7 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2023-10-16',
+  apiVersion: '2023-10-16' as any, // 'as any' evita conflitos de versão do SDK
 })
 
 // ─────────────────────────────────────────────────────────────
@@ -74,7 +75,7 @@ stripeRoutes.post(
       const { data: profile, error } = await supabaseAdmin
         .from('profiles')
         .select('stripe_customer_id')
-        .eq('id', req.user?.id)
+        .eq('id', req.user?.id || '')
         .single()
 
       if (error || !profile?.stripe_customer_id) {
@@ -96,7 +97,6 @@ stripeRoutes.post(
 
 // ─────────────────────────────────────────────────────────────
 // WEBHOOK
-// IMPORTANTE: precisa usar express.raw() na rota principal
 // ─────────────────────────────────────────────────────────────
 stripeRoutes.post(
   '/webhook',
@@ -111,6 +111,7 @@ stripeRoutes.post(
     let event: Stripe.Event
 
     try {
+      // Importante: req.body deve ser o buffer bruto (raw) para webhooks
       event = stripe.webhooks.constructEvent(
         req.body,
         sig,
@@ -123,7 +124,6 @@ stripeRoutes.post(
 
     try {
       switch (event.type) {
-
         case 'checkout.session.completed': {
           const session = event.data.object as Stripe.Checkout.Session
           const userId = session.metadata?.userId
@@ -137,7 +137,6 @@ stripeRoutes.post(
               subscription_status: 'active',
               updated_at: new Date().toISOString(),
             })
-
             logger.info(`User ${userId} subscribed successfully`)
           }
           break
@@ -146,6 +145,7 @@ stripeRoutes.post(
         case 'customer.subscription.updated': {
           const subscription = event.data.object as Stripe.Subscription
           const customerId = subscription.customer as string
+          const status = subscription.status
 
           const { data: profile } = await supabaseAdmin
             .from('profiles')
@@ -154,9 +154,7 @@ stripeRoutes.post(
             .single()
 
           if (profile) {
-            const status = subscription.status
             const plan = status === 'active' ? 'pro' : 'free'
-
             await supabaseAdmin
               .from('profiles')
               .update({
@@ -165,8 +163,6 @@ stripeRoutes.post(
                 updated_at: new Date().toISOString(),
               })
               .eq('id', profile.id)
-
-            logger.info(`Subscription updated: ${status}`)
           }
           break
         }
@@ -190,15 +186,7 @@ stripeRoutes.post(
                 updated_at: new Date().toISOString(),
               })
               .eq('id', profile.id)
-
-            logger.info(`Subscription canceled`)
           }
-          break
-        }
-
-        case 'invoice.payment_failed': {
-          const invoice = event.data.object as Stripe.Invoice
-          logger.warn(`Pagamento falhou para cliente ${invoice.customer}`)
           break
         }
 
