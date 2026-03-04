@@ -9,6 +9,7 @@ const paymentsRouter = require('./routes/payments');
 const convertRouter = require('./routes/convert');
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 
 // ─── Security Middlewares ──────────────────────────────────────────────────────
