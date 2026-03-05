@@ -15,6 +15,7 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
 
+    // Criar usuário no Supabase Auth
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -26,19 +27,26 @@ router.post('/register', async (req, res) => {
       if (error.message.includes('already registered')) {
         return res.status(409).json({ error: 'Email already in use' });
       }
+
+      console.error('Supabase auth error:', error);
       return res.status(400).json({ error: error.message });
     }
 
-    // Create user in database
-    const { error: dbError } = await supabaseAdmin.from('users').upsert({
-      id: data.user.id,
-      email: email,
-      plan: 'free',
-      subscription_status: 'inactive',
-      docs_this_month: 0,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    });
+    const userId = data.user.id;
+
+    // Inserir usuário na tabela users
+    const { error: dbError } = await supabaseAdmin
+      .from('users')
+      .insert({
+        id: userId,
+        email: email,
+        plan: 'free',
+        subscription_status: 'inactive',
+        docs_this_month: 0,
+        usage_month: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
 
     if (dbError) {
       console.error('Database error:', dbError);
@@ -48,8 +56,8 @@ router.post('/register', async (req, res) => {
     res.status(201).json({
       message: 'User created successfully',
       user: {
-        id: data.user.id,
-        email: data.user.email,
+        id: userId,
+        email: email,
         name
       }
     });
@@ -59,6 +67,7 @@ router.post('/register', async (req, res) => {
     res.status(500).json({ error: 'Registration failed' });
   }
 });
+
 
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
@@ -85,7 +94,7 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    // Get user from database
+    // Buscar dados do usuário na tabela users
     const { data: userData, error: userError } = await supabaseAdmin
       .from('users')
       .select('*')
@@ -93,7 +102,7 @@ router.post('/login', async (req, res) => {
       .single();
 
     if (userError) {
-      console.error(userError);
+      console.error('User fetch error:', userError);
     }
 
     res.json({
@@ -104,7 +113,8 @@ router.post('/login', async (req, res) => {
         email: data.user.email,
         name: data.user.user_metadata?.name,
         plan: userData?.plan || 'free',
-        subscription_status: userData?.subscription_status || 'inactive'
+        subscription_status: userData?.subscription_status || 'inactive',
+        docs_this_month: userData?.docs_this_month || 0
       }
     });
 
@@ -113,6 +123,7 @@ router.post('/login', async (req, res) => {
     res.status(500).json({ error: 'Login failed' });
   }
 });
+
 
 // POST /api/auth/refresh
 router.post('/refresh', async (req, res) => {
@@ -145,14 +156,17 @@ router.post('/refresh', async (req, res) => {
     });
 
   } catch (err) {
+    console.error('Refresh error:', err);
     res.status(500).json({ error: 'Token refresh failed' });
   }
 });
+
 
 // POST /api/auth/logout
 router.post('/logout', async (req, res) => {
   res.json({ message: 'Logged out successfully' });
 });
+
 
 // POST /api/auth/forgot-password
 router.post('/forgot-password', async (req, res) => {
@@ -178,6 +192,7 @@ router.post('/forgot-password', async (req, res) => {
     res.json({ message: 'Password reset email sent' });
 
   } catch (err) {
+    console.error('Forgot password error:', err);
     res.status(500).json({ error: 'Failed to send reset email' });
   }
 });
