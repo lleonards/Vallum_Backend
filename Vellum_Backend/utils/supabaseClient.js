@@ -6,16 +6,20 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('❌ Missing Supabase environment variables');
+  console.error('❌ Variáveis de ambiente do Supabase não encontradas!');
+  console.error('Certifique-se de definir: SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_ANON_KEY');
   process.exit(1);
 }
 
-// Service client (admin - bypasses RLS)
+// Client admin (service_role) - ignora RLS
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { autoRefreshToken: false, persistSession: false }
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
 });
 
-// Anon client (respects RLS)
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Client anon - respeita RLS
+const supabase = createClient(supabaseUrl, supabaseAnonKey || '');
 
 module.exports = { supabase, supabaseAdmin };
